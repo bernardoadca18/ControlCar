@@ -99,7 +99,7 @@ DATABASES = {
         'USER': env('DB_USER'),
         'PASSWORD': env('DB_PASSWORD'),
         'HOST': env('DB_HOST'),
-        'PORT': env('DB_PORT', 5432),
+        'PORT': env.int('DB_PORT', default=5432),
     }
 }
 
@@ -151,7 +151,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 #    "http://127.0.0.1:3000",
 #]
 
-CORS_ALLOWED_ORIGINS = env(DJANGO_CORS_ALLOWED_ORIGINS=(list, []),)
+CORS_ALLOWED_ORIGINS = env.list('DJANGO_CORS_ALLOWED_ORIGINS', default=[])
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
