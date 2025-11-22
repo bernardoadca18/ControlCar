@@ -3,14 +3,21 @@ services:
     image: postgres:16
     restart: always
     environment:
-      POSTGRES_DB: carcontrol_db
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: 02040638
+      POSTGRES_DB: control_car_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "02040638"
     ports:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./db:/docker-entrypoint-initdb.d
+    networks:
+      - CarControlNetwork
 
 volumes:
   postgres_data:
     driver: local
+
+networks:
+  CarControlNetwork:
+    external: true

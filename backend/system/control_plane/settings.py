@@ -47,7 +47,8 @@ INSTALLED_APPS = [
     # 3rd party
     'rest_framework',
     'corsheaders',
-    # Others
+    # Local apps
+    'accounts',
     'tenants',
 ]
 
@@ -86,12 +87,8 @@ WSGI_APPLICATION = 'control_plane.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
+AUTH_USER_MODEL = 'accounts.User'
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
