@@ -1,0 +1,220 @@
+generator client {
+  provider        = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["public", "app"]
+}
+
+// --- SCHEMA PUBLIC (PLANO DE CONTROLE / DJANGO) ---
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  // Mapeamento simplificado apenas para leitura de relações, já que é gerido pelo Django
+  ownedTenants Tenant[] @relation("TenantOwner")
+
+  @@map("auth_user")
+  @@schema("public")
+}
+
+model Plan {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  price     Decimal  @db.Decimal(10, 2)
+  features  Json?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  tenants   Tenant[]
+
+  @@map("plans")
+  @@schema("public")
+}
+
+model Tenant {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(255)
+  subdomain String   @unique @db.VarChar(100)
+  cnpj      String?  @unique @db.VarChar(18)
+  status    String   @default("active") @db.VarChar(50)
+  ownerId   String?  @map("owner_id") @db.Uuid
+  planId    String?  @map("plan_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  owner OwnerUser? @relation("TenantOwner", fields: [ownerId], references: [id])
+  plan  Plan?      @relation(fields: [planId], references: [id])
+
+  // Relações com o Schema APP
+  appUsers      AppUser[]
+  clients       Client[]
+  vehicles      Vehicle[]
+  services      Service[]
+  serviceOrders ServiceOrder[]
+
+  @@map("tenants")
+  @@schema("public")
+}
+
+// Alias para evitar conflito de nomes com AppUser
+model OwnerUser {
+  id           String   @id @default(uuid()) @db.Uuid
+  ownedTenants Tenant[] @relation("TenantOwner")
+
+  @@map("auth_user")
+  @@schema("public")
+}
+
+// --- SCHEMA APP (PLANO DE APLICAÇÃO / NODE.JS) ---
+
+model AppUser {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  name         String   @db.VarChar(255)
+  email        String   @db.VarChar(255)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  role         String   @db.VarChar(50) // 'admin', 'receptionist', 'mechanic'
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant           Tenant         @relation(fields: [tenantId], references: [id])
+  createdOrders    ServiceOrder[] @relation("CreatedBy")
+  assignedMechanic ServiceOrder[] @relation("AssignedMechanic")
+
+  @@unique([tenantId, email])
+  @@map("users")
+  @@schema("app")
+}
+
+model Client {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  name      String   @db.VarChar(255)
+  document  String?  @db.VarChar(18)
+  phone     String?  @db.VarChar(20)
+  email     String?  @db.VarChar(255)
+  address   String?  @db.Text
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  vehicles      Vehicle[]
+  serviceOrders ServiceOrder[]
+
+  @@map("clients")
+  @@schema("app")
+}
+
+model Vehicle {
+  id               String   @id @default(uuid()) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  clientId         String   @map("client_id") @db.Uuid
+  plate            String   @db.VarChar(10)
+  vin              String?  @db.VarChar(17)
+  brand            String   @db.VarChar(100)
+  model            String   @db.VarChar(100)
+  year             Int?
+  modelYear        Int?     @map("model_year")
+  color            String?  @db.VarChar(50)
+  engineCode       String?  @map("engine_code") @db.VarChar(50)
+  fuelType         String?  @map("fuel_type") @db.VarChar(50)
+  transmissionType String?  @map("transmission_type") @db.VarChar(50)
+  mileage          Int?
+  notes            String?  @db.Text
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  client        Client         @relation(fields: [clientId], references: [id])
+  serviceOrders ServiceOrder[]
+
+  @@unique([tenantId, plate])
+  @@unique([tenantId, vin])
+  @@map("vehicles")
+  @@schema("app")
+}
+
+model Product {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  description   String   @db.VarChar(255)
+  internalCode  String?  @map("internal_code") @db.VarChar(50)
+  manufacturer  String?  @db.VarChar(100)
+  costPrice     Decimal  @map("cost_price") @db.Decimal(10, 2)
+  salePrice     Decimal  @map("sale_price") @db.Decimal(10, 2)
+  stockQuantity Int      @default(0) @map("stock_quantity")
+  minStockLevel Int      @default(0) @map("min_stock_level")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relação com itens de OS
+  serviceOrderItems ServiceOrderItem[]
+
+  // Não há tabela Tenant FK explícita no SQL original para Product, mas o model_db exige tenant_id
+  // Assumindo a relação lógica:
+  // tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("products")
+  @@schema("app")
+}
+
+model Service {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  description   String
+  category      String?  @db.VarChar(100)
+  standardPrice Decimal? @map("standard_price") @db.Decimal(10, 2)
+  estimatedTime Int?     @map("estimated_time")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id])
+  serviceOrderItems ServiceOrderItem[]
+
+  @@map("services")
+  @@schema("app")
+}
+
+model ServiceOrder {
+  id                 String    @id @default(uuid()) @db.Uuid
+  tenantId           String    @map("tenant_id") @db.Uuid
+  clientId           String    @map("client_id") @db.Uuid
+  vehicleId          String    @map("vehicle_id") @db.Uuid
+  status             String    @default("opened") @db.VarChar(50)
+  problemDescription String?   @map("problem_description") @db.Text
+  technicalReport    String?   @map("technical_report") @db.Text
+  totalAmount        Decimal   @default(0) @map("total_amount") @db.Decimal(10, 2)
+  createdById        String?   @map("created_by_id") @db.Uuid
+  assignedMechanicId String?   @map("assigned_mechanic_id") @db.Uuid
+  finishedAt         DateTime? @map("finished_at") @db.Timestamptz
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant    Tenant             @relation(fields: [tenantId], references: [id])
+  client    Client             @relation(fields: [clientId], references: [id])
+  vehicle   Vehicle            @relation(fields: [vehicleId], references: [id])
+  createdBy AppUser?           @relation("CreatedBy", fields: [createdById], references: [id])
+  mechanic  AppUser?           @relation("AssignedMechanic", fields: [assignedMechanicId], references: [id])
+  items     ServiceOrderItem[]
+
+  @@map("service_orders")
+  @@schema("app")
+}
+
+model ServiceOrderItem {
+  id             String   @id @default(uuid()) @db.Uuid
+  serviceOrderId String   @map("service_order_id") @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  productId      String?  @map("product_id") @db.Uuid
+  serviceId      String?  @map("service_id") @db.Uuid
+  description    String   @db.VarChar(255)
+  quantity       Decimal  @db.Decimal(10, 2)
+  unitPrice      Decimal  @map("unit_price") @db.Decimal(10, 2)
+  totalPrice     Decimal  @map("total_price") @db.Decimal(10, 2)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id])
+  product      Product?     @relation(fields: [productId], references: [id])
+  service      Service?     @relation(fields: [serviceId], references: [id])
+
+  @@map("service_order_items")
+  @@schema("app")
+}
