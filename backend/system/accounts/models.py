@@ -4,15 +4,19 @@ from django.db import models
 
 class User(AbstractUser):
     """
-    Usuário do Painel de Controle (Public Schema).
-    Geralmente representa o dono da oficina (Owner) ou Admins do SaaS.
+    Representa o usuário no schema 'public'. 
+    Geralmente é o Administrador do SaaS ou o Proprietário (Owner) de um Tenant.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email = models.EmailField("E-mail", unique=True) # Forçar e-mail único
     
-    # Campos adicionais
-    
+    is_deleted = models.BooleanField(default=False)
+
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
+
     class Meta:
-        db_table = 'auth_user' # Mantém padrão ou muda para 'users' se preferir
+        db_table = 'auth_user'
         verbose_name = 'Usuário'
         verbose_name_plural = 'Usuários'
 
