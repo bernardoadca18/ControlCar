@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from .models import Tenant, Plan
 from accounts.models import User
+from accounts.serializers import UserSerializer
+from .validators import validate_subdomain
 
 class PlanSerializer(serializers.ModelSerializer):
     class Meta:
@@ -23,18 +25,19 @@ class TenantSerializer(serializers.ModelSerializer):
             'id', 'name', 'subdomain', 'cnpj', 'status', 
             'owner', 'owner_details', 'plan', 'plan_details', 'created_at'
         ]
-        read_only_fields = ['status', 'created_at']
+        read_only_fields = ['status', 'created_at', 'owner']
 
 class TenantRegistrationSerializer(serializers.Serializer):
     """
     Serializer específico para o cadastro inicial (Sign Up).
     Cria o Usuário e o Tenant atomicamente.
     """
-    owner_name = serializers.CharField(max_length=255)
-    email = serializers.EmailField()
-    password = serializers.CharField(write_only=True, min_length=8)
-    office_name = serializers.CharField(max_length=255)
-    subdomain = serializers.SlugField(max_length=100)
+    owner_name = serializers.CharField(max_length=255, required=True)
+    email = serializers.EmailField(required=True)
+    password = serializers.CharField(write_only=True, min_length=8, style={'input_type': 'password'})
+    office_name = serializers.CharField(max_length=255, required=True)
+    subdomain = serializers.SlugField(max_length=100, validators=[validate_subdomain])
+    cnpj = serializers.CharField(max_length=18, required=False, allow_blank=True)
     plan_id = serializers.UUIDField()
 
     def validate_email(self, value):

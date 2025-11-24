@@ -46,7 +46,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # 3rd party
     'rest_framework',
+    'rest_framework_simplejwt',
     'corsheaders',
+    'drf_spectacular',
     # Local apps
     'accounts',
     'tenants',
@@ -154,8 +156,17 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+}
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'ControlCar SaaS Control Plane API',
+    'DESCRIPTION': 'API para gerenciamento de Tenants, Planos e Usuários Administrativos.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
 }
 
 AUTH_USER_MODEL = 'accounts.User'

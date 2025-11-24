@@ -1,7 +1,9 @@
 from django.db import transaction
-from rest_framework import viewsets, status, permissions
+from rest_framework import viewsets, status, permissions, views
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from drf_spectacular.utils import extend_schema, OpenApiParameter
+
 from .models import Tenant, Plan
 from accounts.models import User
 from .serializers import TenantSerializer, PlanSerializer, TenantRegistrationSerializer
@@ -30,6 +32,11 @@ class TenantViewSet(viewsets.ModelViewSet):
             return Tenant.objects.all()
         return Tenant.objects.filter(owner=user)
 
+    @extend_schema(
+        summary="Registrar nova oficina",
+        request=TenantRegistrationSerializer,
+        responses={201: TenantSerializer}
+    )
     @action(detail=False, methods=['post'], permission_classes=[permissions.AllowAny])
     def register(self, request):
         """
@@ -61,11 +68,15 @@ class TenantViewSet(viewsets.ModelViewSet):
                         plan=plan
                     )
 
-                return Response({
-                    "message": "Oficina registrada com sucesso!",
-                    "tenant_id": tenant.id,
-                    "subdomain": tenant.subdomain
-                }, status=status.HTTP_201_CREATED)
+                # return Response({
+                #     "message": "Oficina registrada com sucesso!",
+                #     "tenant_id": tenant.id,
+                #     "subdomain": tenant.subdomain
+                # }, status=status.HTTP_201_CREATED)
+                return Response(
+                    TenantSerializer(tenant).data, 
+                    status=status.HTTP_201_CREATED
+                )
 
             except Plan.DoesNotExist:
                 return Response({"error": "Plano inválido."}, status=status.HTTP_400_BAD_REQUEST)
@@ -73,3 +84,31 @@ class TenantViewSet(viewsets.ModelViewSet):
                 return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+class CheckDomainView(views.APIView):
+    """
+    Verifica se um subdomínio está disponível para registro.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    @extend_schema(
+        parameters=[OpenApiParameter(name='subdomain', description='Subdomínio para verificar', required=True, type=str)],
+        responses={200: {'description': 'Status de disponibilidade'}}
+    )
+    def get(self, request):
+        subdomain = request.query_params.get('subdomain')
+        if not subdomain:
+            return Response({"error": "Parâmetro 'subdomain' é obrigatório."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Usa o validador para verificar formato
+        from .validators import validate_subdomain
+        try:
+            validate_subdomain(subdomain)
+        except Exception as e:
+             return Response({"available": False, "reason": str(e)}, status=status.HTTP_200_OK)
+
+        exists = Tenant.objects.filter(subdomain=subdomain).exists()
+        if exists:
+            return Response({"available": False, "reason": "Este domínio já está em uso."}, status=status.HTTP_200_OK)
+        
+        return Response({"available": True}, status=status.HTTP_200_OK)

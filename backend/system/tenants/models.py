@@ -2,6 +2,7 @@ import uuid
 from django.db import models
 from django.conf import settings
 from django.utils.text import slugify
+from .validators import validate_subdomain
 
 class Plan(models.Model):
     """
@@ -55,6 +56,14 @@ class Tenant(models.Model):
         related_name='tenants',
         verbose_name="Plano Vigente",
         null=True, blank=True
+    )
+    
+    subdomain = models.SlugField(
+        "Subdomínio", 
+        max_length=100, 
+        unique=True,
+        validators=[validate_subdomain], # Adicionado validador
+        help_text="Identificador único na URL (ex: oficina-centro)"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
