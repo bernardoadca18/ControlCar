@@ -40,6 +40,7 @@ export interface ServiceOrder {
   totalAmount: number;
   status: string;
   createdAt: string;
+  updatedAt: string;
   client?: { name: string };
   vehicle?: { plate: string; model: string };
 }

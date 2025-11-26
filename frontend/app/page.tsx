@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api } from "./src/services/api";
+import { useRouter } from "next/navigation";
 
 export default function Dashboard() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     clients: 0,
@@ -11,12 +13,17 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
+    const tenantId = localStorage.getItem('controlcar_tenant_id');
+    
+    if (!tenantId) {
+      router.push('/login');
+      return; 
+    }
+    // ----------------------------------
+
     async function loadData() {
       try {
-        // IMPORTANTE: Para a apresentação, você pode precisar passar o ID do Tenant aqui
-        // se implementar a lógica do Passo 2. Por enquanto, deixe assim.
         const response = await api.get('/api/dashboard');
-        
         setStats({
             clients: response.data.totalClients || 0,
             orders: response.data.totalOS || 0,
@@ -24,14 +31,21 @@ export default function Dashboard() {
         });
       } catch (error) {
         console.error("Erro ao carregar dashboard", error);
-        setStats({ clients: 0, orders: 0, revenue: 0 }); 
-      } finally {
+        } finally {
         setLoading(false);
       }
     }
     loadData();
-  }, []);
+  }, [router]);
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <p className="text-gray-500 text-xl animate-pulse">Carregando sistema...</p>
+      </div>
+    );
+  }
+  
   return (
     <div>
       <h2 className="text-3xl font-bold mb-6 text-gray-800">Visão Geral</h2>

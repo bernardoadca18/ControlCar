@@ -14,7 +14,6 @@ app.use('/doc', swaggerUi.serve, swaggerUi.setup(swaggerFile));
 
 const getTenantId = async (req) => {
     const tenantIdHeader = req.headers['x-tenant-id'];
-    
     if (tenantIdHeader && tenantIdHeader !== 'undefined' && tenantIdHeader !== 'null') {
         return tenantIdHeader;
     }
@@ -25,59 +24,34 @@ const getTenantId = async (req) => {
 
 app.post('/api/login', async (req, res) => {
     const { email } = req.body;
-    console.log("--- TENTATIVA DE LOGIN ---");
-    console.log("Email recebido:", email);
-
     try {
-        const user = await prisma.user.findFirst({
-            where: { email: email }
-        });
+        const user = await prisma.user.findFirst({ where: { email } });
+        if (!user) return res.status(401).json({ error: "Usuário não encontrado." });
         
-        console.log("Resultado da busca de usuário:", user);
+        // Tenta achar tenant do dono ou pega o primeiro (modo demo)
+        let tenant = await prisma.tenant.findFirst({ where: { ownerId: user.id } });
+        if (!tenant) tenant = await prisma.tenant.findFirst();
 
-        if (!user) {
-            console.log("FALHA: Usuário não encontrado.");
-            return res.status(401).json({ error: "Usuário não encontrado no sistema." });
-        }
-
-        console.log("Buscando tenant para Owner ID:", user.id);
-        const tenant = await prisma.tenant.findFirst({
-            where: { ownerId: user.id }
-        });
-
-        console.log("Resultado da busca de tenant:", tenant);
-
-        if (!tenant) {
-            console.log("FALHA: Este usuário existe, mas não é dono de tenant.");
-            return res.status(401).json({ error: "Este usuário não possui uma oficina vinculada." });
-        }
-
-        console.log("SUCESSO: Login aprovado.");
-        return res.json({
-            tenantId: tenant.id,
-            name: user.first_name || user.username
-        });
-
+        return res.json({ tenantId: tenant?.id, name: user.first_name });
     } catch (error) {
-        console.error("ERRO CRÍTICO NO LOGIN:", error);
-        return res.status(500).json({ error: "Erro interno no servidor" });
+        return res.status(500).json({ error: "Erro interno" });
     }
 });
 
 app.get('/api/dashboard', async (req, res) => {
     const tenantId = await getTenantId(req);
-    if (!tenantId) return res.status(400).json({ error: "Tenant não identificado" });
 
     const osCount = await prisma.serviceOrder.count({ where: { tenantId, status: 'opened' } });
     const clientsCount = await prisma.client.count({ where: { tenantId } });
+
     const revenue = await prisma.serviceOrder.aggregate({
         where: { tenantId, status: 'finished' },
         _sum: { totalAmount: true }
     });
 
     res.json({ 
-        totalOS: osCount, 
-        totalClients: clientsCount, 
+        totalOS: osCount,
+        totalClients: clientsCount,
         revenue: revenue._sum.totalAmount || 0 
     });
 });
@@ -86,7 +60,8 @@ app.get('/api/clients', async (req, res) => {
     const tenantId = await getTenantId(req);
     const clients = await prisma.client.findMany({ 
         where: { tenantId },
-        include: { vehicles: true } 
+        include: { vehicles: true },
+        orderBy: { createdAt: 'desc' }
     });
     res.json(clients);
 });
@@ -95,22 +70,53 @@ app.post('/api/clients', async (req, res) => {
     const tenantId = await getTenantId(req);
     const { name, phone, plate, model } = req.body;
     
-    const client = await prisma.client.create({
-        data: {
-            tenantId,
-            name,
-            phone,
-            vehicles: {
-                create: {
-                    tenantId,
-                    plate,
-                    model,
-                    brand: 'Generica'
+    try {
+        const client = await prisma.client.create({
+            data: {
+                tenantId,
+                name,
+                phone,
+                vehicles: {
+                    create: { tenantId, plate, model, brand: 'Generica' }
                 }
             }
-        }
+        });
+        res.json(client);
+    } catch (e) {
+        res.status(400).json({ error: "Erro ao criar. Verifique dados duplicados." });
+    }
+});
+
+app.put('/api/clients/:id', async (req, res) => {
+    const { id } = req.params;
+    const { name, phone, plate, model } = req.body;
+    
+    const client = await prisma.client.update({
+        where: { id },
+        data: { name, phone },
+        include: { vehicles: true }
     });
+
+    if (client.vehicles.length > 0 && (plate || model)) {
+        await prisma.vehicle.update({
+            where: { id: client.vehicles[0].id },
+            data: { plate, model }
+        });
+    }
+    
     res.json(client);
+});
+
+app.delete('/api/clients/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        await prisma.serviceOrder.deleteMany({ where: { clientId: id } }); // Limpa OS do cliente
+        await prisma.vehicle.deleteMany({ where: { clientId: id } }); // Limpa carros
+        await prisma.client.delete({ where: { id } });
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: "Erro ao deletar" });
+    }
 });
 
 app.get('/api/os', async (req, res) => {
@@ -126,15 +132,24 @@ app.get('/api/os', async (req, res) => {
 app.post('/api/os', async (req, res) => {
     const tenantId = await getTenantId(req);
     const { clientId, vehicleId, description, total } = req.body;
-
     const os = await prisma.serviceOrder.create({
         data: {
-            tenantId,
-            clientId,
-            vehicleId,
-            problemDescription: description,
-            totalAmount: total || 0,
+            tenantId, clientId, vehicleId, 
+            problemDescription: description, 
+            totalAmount: total || 0, 
             status: 'opened'
+        }
+    });
+    res.json(os);
+});
+
+app.patch('/api/os/:id/finish', async (req, res) => {
+    const { id } = req.params;
+    const os = await prisma.serviceOrder.update({
+        where: { id },
+        data: { 
+            status: 'finished',
+            finishedAt: new Date()
         }
     });
     res.json(os);
