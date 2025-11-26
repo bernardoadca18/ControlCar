@@ -1,22 +1,27 @@
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["multiSchema"]
-  //output   = "../src/generated/client"
 }
 
 datasource db {
   provider = "postgresql"
-  schemas  = ["public", "app"]
   url      = env("DATABASE_URL")
+  schemas  = ["app", "public"]
 }
 
-// --- SCHEMA PUBLIC (PLANO DE CONTROLE / DJANGO) ---
-
 model User {
-  id           String   @id @default(uuid()) @db.Uuid
-  email        String   @unique
-  // Mapeamento simplificado apenas para leitura de relações, já que é gerido pelo Django
-  ownedTenants Tenant[] @relation("TenantOwner")
+  password     String    @db.VarChar(128)
+  last_login   DateTime? @db.Timestamptz(6)
+  is_superuser Boolean
+  username     String    @unique @db.VarChar(150)
+  first_name   String    @db.VarChar(150)
+  last_name    String    @db.VarChar(150)
+  is_staff     Boolean
+  is_active    Boolean
+  date_joined  DateTime  @db.Timestamptz(6)
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique @db.VarChar(254)
+  is_deleted   Boolean
 
   @@map("auth_user")
   @@schema("public")
@@ -24,12 +29,13 @@ model User {
 
 model Plan {
   id        String   @id @default(uuid()) @db.Uuid
-  name      String   @unique
+  name      String   @unique @db.VarChar(100)
   price     Decimal  @db.Decimal(10, 2)
-  features  Json?
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  tenants   Tenant[]
+  features  Json
+  isActive  Boolean  @map("is_active")
+  createdAt DateTime @map("created_at") @db.Timestamptz(6)
 
+  @@index([name], map: "plans_name_aca209aa_like")
   @@map("plans")
   @@schema("public")
 }
@@ -39,176 +45,205 @@ model Tenant {
   name      String   @db.VarChar(255)
   subdomain String   @unique @db.VarChar(100)
   cnpj      String?  @unique @db.VarChar(18)
-  status    String   @default("active") @db.VarChar(50)
+  status    String   @db.VarChar(50)
+  createdAt DateTime @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
   ownerId   String?  @map("owner_id") @db.Uuid
   planId    String?  @map("plan_id") @db.Uuid
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  owner User? @relation("TenantOwner", fields: [ownerId], references: [id])
-  plan  Plan?      @relation(fields: [planId], references: [id])
-
-  // Relações com o Schema APP
-  appUsers      AppUser[]
-  clients       Client[]
-  vehicles      Vehicle[]
-  services      Service[]
-  serviceOrders ServiceOrder[]
-
+  @@index([cnpj], map: "tenants_cnpj_6059971e_like")
+  @@index([ownerId], map: "tenants_owner_id_a8692394")
+  @@index([planId], map: "tenants_plan_id_a1af5c03")
+  @@index([subdomain], map: "tenants_subdomain_0df86ad4_like")
   @@map("tenants")
   @@schema("public")
 }
 
-// --- SCHEMA APP (PLANO DE APLICAÇÃO / NODE.JS) ---
-
 model AppUser {
-  id           String   @id @default(uuid()) @db.Uuid
+  id           String   @id(map: "users_id_pk") @default(uuid()) @db.Uuid
   tenantId     String   @map("tenant_id") @db.Uuid
   name         String   @db.VarChar(255)
   email        String   @db.VarChar(255)
   passwordHash String   @map("password_hash") @db.VarChar(255)
-  role         String   @db.VarChar(50) // 'admin', 'receptionist', 'mechanic'
+  role         String   @db.VarChar(50)
   isActive     Boolean  @default(true) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  tenant           Tenant         @relation(fields: [tenantId], references: [id])
-  createdOrders    ServiceOrder[] @relation("CreatedBy")
-  assignedMechanic ServiceOrder[] @relation("AssignedMechanic")
-
-  @@unique([tenantId, email])
+  @@unique([tenantId, email], map: "tenant_id_email_uq")
   @@map("users")
   @@schema("app")
 }
 
-model Client {
-  id        String   @id @default(uuid()) @db.Uuid
-  tenantId  String   @map("tenant_id") @db.Uuid
-  name      String   @db.VarChar(255)
-  document  String?  @db.VarChar(18)
-  phone     String?  @db.VarChar(20)
-  email     String?  @db.VarChar(255)
-  address   String?  @db.Text
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+model Vehicle {
+  id               String         @id(map: "vehicles_pk") @default(uuid()) @db.Uuid
+  tenantId         String         @map("tenant_id") @db.Uuid
+  clientId         String         @map("client_id") @db.Uuid
+  plate            String         @db.VarChar(10)
+  vin              String?        @db.VarChar(17)
+  brand            String?        @db.VarChar(100)
+  model            String         @db.VarChar(100)
+  year             Int?
+  modelYear        Int?           @map("model_year")
+  color            String?        @db.VarChar(50)
+  engineCode       String?        @map("engine_code") @db.VarChar(50)
+  fuelType         String?        @map("fuel_type") @db.VarChar(50)
+  transmissionType String?        @map("transmission_type") @db.VarChar(50)
+  mileage          Int?
+  notes            String?
+  createdAt        DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  Client           Client         @relation(fields: [clientId], references: [id])
+  ServiceOrder     ServiceOrder[]
 
-  tenant        Tenant         @relation(fields: [tenantId], references: [id])
-  vehicles      Vehicle[]
-  serviceOrders ServiceOrder[]
+  @@unique([tenantId, plate], map: "tenant_id_plate_uq")
+  @@unique([tenantId, vin], map: "tenant_id_vin_uq")
+  @@map("vehicles")
+  @@schema("app")
+}
+
+model Client {
+  id           String         @id(map: "id_pk") @default(uuid()) @db.Uuid
+  tenantId     String         @map("tenant_id") @db.Uuid
+  name         String         @db.VarChar(255)
+  document     String?        @db.VarChar(18)
+  phone        String?        @db.VarChar(20)
+  email        String?        @db.VarChar(255)
+  address      String?
+  isActive     Boolean        @default(true) @map("is_active")
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  vehicles     Vehicle[]
+  ServiceOrder ServiceOrder[]
 
   @@map("clients")
   @@schema("app")
 }
 
-model Vehicle {
-  id               String   @id @default(uuid()) @db.Uuid
-  tenantId         String   @map("tenant_id") @db.Uuid
-  clientId         String   @map("client_id") @db.Uuid
-  plate            String   @db.VarChar(10)
-  vin              String?  @db.VarChar(17)
-  brand            String   @db.VarChar(100)
-  model            String   @db.VarChar(100)
-  year             Int?
-  modelYear        Int?     @map("model_year")
-  color            String?  @db.VarChar(50)
-  engineCode       String?  @map("engine_code") @db.VarChar(50)
-  fuelType         String?  @map("fuel_type") @db.VarChar(50)
-  transmissionType String?  @map("transmission_type") @db.VarChar(50)
-  mileage          Int?
-  notes            String?  @db.Text
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
-
-  tenant        Tenant         @relation(fields: [tenantId], references: [id])
-  client        Client         @relation(fields: [clientId], references: [id])
-  serviceOrders ServiceOrder[]
-
-  @@unique([tenantId, plate])
-  @@unique([tenantId, vin])
-  @@map("vehicles")
-  @@schema("app")
-}
-
-model Product {
-  id            String   @id @default(uuid()) @db.Uuid
-  tenantId      String   @map("tenant_id") @db.Uuid
-  description   String   @db.VarChar(255)
-  internalCode  String?  @map("internal_code") @db.VarChar(50)
-  manufacturer  String?  @db.VarChar(100)
-  costPrice     Decimal  @map("cost_price") @db.Decimal(10, 2)
-  salePrice     Decimal  @map("sale_price") @db.Decimal(10, 2)
-  stockQuantity Int      @default(0) @map("stock_quantity")
-  minStockLevel Int      @default(0) @map("min_stock_level")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
-
-  // Relação com itens de OS
-  serviceOrderItems ServiceOrderItem[]
-
-  // Não há tabela Tenant FK explícita no SQL original para Product, mas o model_db exige tenant_id
-  // Assumindo a relação lógica:
-  // tenant Tenant @relation(fields: [tenantId], references: [id])
-
-  @@map("products")
-  @@schema("app")
-}
-
 model Service {
-  id            String   @id @default(uuid()) @db.Uuid
+  id            String   @id(map: "services_pk") @default(uuid()) @db.Uuid
   tenantId      String   @map("tenant_id") @db.Uuid
   description   String
   category      String?  @db.VarChar(100)
-  standardPrice Decimal? @map("standard_price") @db.Decimal(10, 2)
+  standardPrice Decimal? @map("standard_price") @db.Decimal(16, 2)
   estimatedTime Int?     @map("estimated_time")
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
-
-  tenant            Tenant             @relation(fields: [tenantId], references: [id])
-  serviceOrderItems ServiceOrderItem[]
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@map("services")
   @@schema("app")
 }
 
 model ServiceOrder {
-  id                 String    @id @default(uuid()) @db.Uuid
+  id                 String    @id(map: "service_orders_pk") @default(uuid()) @db.Uuid
   tenantId           String    @map("tenant_id") @db.Uuid
   clientId           String    @map("client_id") @db.Uuid
   vehicleId          String    @map("vehicle_id") @db.Uuid
   status             String    @default("opened") @db.VarChar(50)
-  problemDescription String?   @map("problem_description") @db.Text
-  technicalReport    String?   @map("technical_report") @db.Text
-  totalAmount        Decimal   @default(0) @map("total_amount") @db.Decimal(10, 2)
+  problemDescription String?   @map("problem_description")
+  technicalReport    String?   @map("technical_report")
+  totalAmount        Decimal   @default(0) @map("total_amount") @db.Decimal(16, 2)
   createdById        String?   @map("created_by_id") @db.Uuid
   assignedMechanicId String?   @map("assigned_mechanic_id") @db.Uuid
-  finishedAt         DateTime? @map("finished_at") @db.Timestamptz
-  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
-
-  tenant    Tenant             @relation(fields: [tenantId], references: [id])
-  client    Client             @relation(fields: [clientId], references: [id])
-  vehicle   Vehicle            @relation(fields: [vehicleId], references: [id])
-  createdBy AppUser?           @relation("CreatedBy", fields: [createdById], references: [id])
-  mechanic  AppUser?           @relation("AssignedMechanic", fields: [assignedMechanicId], references: [id])
-  items     ServiceOrderItem[]
+  finishedAt         DateTime? @map("finished_at") @db.Timestamptz(6)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  client             Client    @relation(fields: [clientId], references: [id])
+  vehicle            Vehicle   @relation(fields: [vehicleId], references: [id])
 
   @@map("service_orders")
   @@schema("app")
 }
 
-model ServiceOrderItem {
-  id             String   @id @default(uuid()) @db.Uuid
-  serviceOrderId String   @map("service_order_id") @db.Uuid
-  tenantId       String   @map("tenant_id") @db.Uuid
-  productId      String?  @map("product_id") @db.Uuid
-  serviceId      String?  @map("service_id") @db.Uuid
-  description    String   @db.VarChar(255)
-  quantity       Decimal  @db.Decimal(10, 2)
-  unitPrice      Decimal  @map("unit_price") @db.Decimal(10, 2)
-  totalPrice     Decimal  @map("total_price") @db.Decimal(10, 2)
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+model auth_group {
+  id   Int    @id @default(autoincrement())
+  name String @unique @db.VarChar(150)
 
-  serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id])
-  product      Product?     @relation(fields: [productId], references: [id])
-  service      Service?     @relation(fields: [serviceId], references: [id])
+  @@index([name], map: "auth_group_name_a6ea08ec_like")
+  @@schema("public")
+}
 
-  @@map("service_order_items")
-  @@schema("app")
+model auth_group_permissions {
+  id            BigInt @id @default(autoincrement())
+  group_id      Int
+  permission_id Int
+
+  @@unique([group_id, permission_id], map: "auth_group_permissions_group_id_permission_id_0cd325b0_uniq")
+  @@index([group_id], map: "auth_group_permissions_group_id_b120cbf9")
+  @@index([permission_id], map: "auth_group_permissions_permission_id_84c5c92e")
+  @@schema("public")
+}
+
+model auth_permission {
+  id              Int    @id @default(autoincrement())
+  name            String @db.VarChar(255)
+  content_type_id Int
+  codename        String @db.VarChar(100)
+
+  @@unique([content_type_id, codename], map: "auth_permission_content_type_id_codename_01ab375a_uniq")
+  @@index([content_type_id], map: "auth_permission_content_type_id_2f476e4b")
+  @@schema("public")
+}
+
+model auth_user_groups {
+  id       BigInt @id @default(autoincrement())
+  user_id  String @db.Uuid
+  group_id Int
+
+  @@unique([user_id, group_id], map: "auth_user_groups_user_id_group_id_94350c0c_uniq")
+  @@index([group_id], map: "auth_user_groups_group_id_97559544")
+  @@index([user_id], map: "auth_user_groups_user_id_6a12ed8b")
+  @@schema("public")
+}
+
+model auth_user_user_permissions {
+  id            BigInt @id @default(autoincrement())
+  user_id       String @db.Uuid
+  permission_id Int
+
+  @@unique([user_id, permission_id], map: "auth_user_user_permissions_user_id_permission_id_14a6b632_uniq")
+  @@index([permission_id], map: "auth_user_user_permissions_permission_id_1fbb5f2c")
+  @@index([user_id], map: "auth_user_user_permissions_user_id_a95ead1b")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model django_admin_log {
+  id              Int      @id @default(autoincrement())
+  action_time     DateTime @db.Timestamptz(6)
+  object_id       String?
+  object_repr     String   @db.VarChar(200)
+  action_flag     Int      @db.SmallInt
+  change_message  String
+  content_type_id Int?
+  user_id         String   @db.Uuid
+
+  @@index([content_type_id], map: "django_admin_log_content_type_id_c4bce8eb")
+  @@index([user_id], map: "django_admin_log_user_id_c564eba6")
+  @@schema("public")
+}
+
+model django_content_type {
+  id        Int    @id @default(autoincrement())
+  app_label String @db.VarChar(100)
+  model     String @db.VarChar(100)
+
+  @@unique([app_label, model], map: "django_content_type_app_label_model_76bd3d3b_uniq")
+  @@schema("public")
+}
+
+model django_migrations {
+  id      BigInt   @id @default(autoincrement())
+  app     String   @db.VarChar(255)
+  name    String   @db.VarChar(255)
+  applied DateTime @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
+model django_session {
+  session_key  String   @id @db.VarChar(40)
+  session_data String
+  expire_date  DateTime @db.Timestamptz(6)
+
+  @@index([expire_date], map: "django_session_expire_date_a5c62663")
+  @@index([session_key], map: "django_session_session_key_c0390e0f_like")
+  @@schema("public")
 }
