@@ -13,6 +13,55 @@ services:
       - ./db:/docker-entrypoint-initdb.d
     networks:
       - CarControlNetwork
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  backend-node:
+    build:
+      context: ./backend/app
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: "postgresql://postgres:02040638@db:5432/control_car_db?schema=public"
+      PORT: 3001
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - CarControlNetwork
+  backend-django:
+    build:
+      context: ./backend/system
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      DB_NAME: control_car_db
+      DB_USER: postgres
+      DB_PASSWORD: "02040638"
+      DB_HOST: db
+      DB_PORT: 5432
+      DJANGO_SECRET_KEY: "django-insecure-chave-secreta-padrao-para-docker-dev"
+      DJANGO_DEBUG: "True"
+      DJANGO_ALLOWED_HOSTS: "*"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - CarControlNetwork
+  frontend:
+    build:
+      context: ./frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:3001"
+    networks:
+      - CarControlNetwork
 
 volumes:
   postgres_data:
