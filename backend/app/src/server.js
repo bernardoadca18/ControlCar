@@ -11,24 +11,79 @@ app.use(cors());
 app.use(express.json());
 app.use('/doc', swaggerUi.serve, swaggerUi.setup(swaggerFile));
 
-const getTenantId = async () => {
+
+const getTenantId = async (req) => {
+    const tenantIdHeader = req.headers['x-tenant-id'];
+    
+    if (tenantIdHeader && tenantIdHeader !== 'undefined' && tenantIdHeader !== 'null') {
+        return tenantIdHeader;
+    }
+
     const tenant = await prisma.tenant.findFirst();
-    return tenant.id;
+    return tenant ? tenant.id : null;
 };
 
+app.post('/api/login', async (req, res) => {
+    const { email } = req.body;
+    console.log("--- TENTATIVA DE LOGIN ---");
+    console.log("Email recebido:", email);
+
+    try {
+        const user = await prisma.user.findFirst({
+            where: { email: email }
+        });
+        
+        console.log("Resultado da busca de usuário:", user);
+
+        if (!user) {
+            console.log("FALHA: Usuário não encontrado.");
+            return res.status(401).json({ error: "Usuário não encontrado no sistema." });
+        }
+
+        console.log("Buscando tenant para Owner ID:", user.id);
+        const tenant = await prisma.tenant.findFirst({
+            where: { ownerId: user.id }
+        });
+
+        console.log("Resultado da busca de tenant:", tenant);
+
+        if (!tenant) {
+            console.log("FALHA: Este usuário existe, mas não é dono de tenant.");
+            return res.status(401).json({ error: "Este usuário não possui uma oficina vinculada." });
+        }
+
+        console.log("SUCESSO: Login aprovado.");
+        return res.json({
+            tenantId: tenant.id,
+            name: user.first_name || user.username
+        });
+
+    } catch (error) {
+        console.error("ERRO CRÍTICO NO LOGIN:", error);
+        return res.status(500).json({ error: "Erro interno no servidor" });
+    }
+});
+
 app.get('/api/dashboard', async (req, res) => {
-    const tenantId = await getTenantId();
+    const tenantId = await getTenantId(req);
+    if (!tenantId) return res.status(400).json({ error: "Tenant não identificado" });
+
     const osCount = await prisma.serviceOrder.count({ where: { tenantId, status: 'opened' } });
     const clientsCount = await prisma.client.count({ where: { tenantId } });
     const revenue = await prisma.serviceOrder.aggregate({
         where: { tenantId, status: 'finished' },
         _sum: { totalAmount: true }
     });
-    res.json({ osOpened: osCount, clients: clientsCount, revenue: revenue._sum.totalAmount || 0 });
+
+    res.json({ 
+        totalOS: osCount, 
+        totalClients: clientsCount, 
+        revenue: revenue._sum.totalAmount || 0 
+    });
 });
 
 app.get('/api/clients', async (req, res) => {
-    const tenantId = await getTenantId();
+    const tenantId = await getTenantId(req);
     const clients = await prisma.client.findMany({ 
         where: { tenantId },
         include: { vehicles: true } 
@@ -37,7 +92,7 @@ app.get('/api/clients', async (req, res) => {
 });
 
 app.post('/api/clients', async (req, res) => {
-    const tenantId = await getTenantId();
+    const tenantId = await getTenantId(req);
     const { name, phone, plate, model } = req.body;
     
     const client = await prisma.client.create({
@@ -58,9 +113,8 @@ app.post('/api/clients', async (req, res) => {
     res.json(client);
 });
 
-
 app.get('/api/os', async (req, res) => {
-    const tenantId = await getTenantId();
+    const tenantId = await getTenantId(req);
     const os = await prisma.serviceOrder.findMany({
         where: { tenantId },
         include: { client: true, vehicle: true },
@@ -70,7 +124,7 @@ app.get('/api/os', async (req, res) => {
 });
 
 app.post('/api/os', async (req, res) => {
-    const tenantId = await getTenantId();
+    const tenantId = await getTenantId(req);
     const { clientId, vehicleId, description, total } = req.body;
 
     const os = await prisma.serviceOrder.create({

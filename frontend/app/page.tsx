@@ -4,27 +4,27 @@ import { api } from "./src/services/api";
 
 export default function Dashboard() {
   const [loading, setLoading] = useState(true);
-  
-  // Mockando dados caso a API falhe na apresentação
   const [stats, setStats] = useState({
     clients: 0,
-    orders: 0
+    orders: 0,
+    revenue: 0
   });
 
   useEffect(() => {
-    // Tenta buscar dados reais, se falhar, mantém zero ou usa mock
     async function loadData() {
       try {
+        // IMPORTANTE: Para a apresentação, você pode precisar passar o ID do Tenant aqui
+        // se implementar a lógica do Passo 2. Por enquanto, deixe assim.
         const response = await api.get('/api/dashboard');
-        // { totalClients: 10, totalOS: 5 }
+        
         setStats({
-            clients: response.data.totalClients || 12, // fallback para demo
-            orders: response.data.totalOS || 5
+            clients: response.data.totalClients || 0,
+            orders: response.data.totalOS || 0,
+            revenue: response.data.revenue || 0
         });
       } catch (error) {
         console.error("Erro ao carregar dashboard", error);
-        // Fallback visual para a apresentação não ficar vazia
-        setStats({ clients: 15, orders: 8 }); 
+        setStats({ clients: 0, orders: 0, revenue: 0 }); 
       } finally {
         setLoading(false);
       }
@@ -49,7 +49,7 @@ export default function Dashboard() {
 
         <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-yellow-500">
           <h3 className="text-gray-500 text-sm font-medium">Faturamento (Mês)</h3>
-          <p className="text-3xl font-bold text-gray-900">R$ 1.250,00</p>
+          <p className="text-3xl font-bold text-gray-900">R$ {stats.revenue}</p>
         </div>
       </div>
     </div>
