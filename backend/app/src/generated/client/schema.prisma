@@ -1,13 +1,11 @@
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["multiSchema"]
-  //output   = "../src/generated/client"
+  provider = "prisma-client-js"
+  output   = "../src/generated/client"
 }
 
 datasource db {
   provider = "postgresql"
   schemas  = ["public", "app"]
-  url      = env("DATABASE_URL")
 }
 
 // --- SCHEMA PUBLIC (PLANO DE CONTROLE / DJANGO) ---
@@ -46,7 +44,7 @@ model Tenant {
   updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   owner User? @relation("TenantOwner", fields: [ownerId], references: [id])
-  plan  Plan?      @relation(fields: [planId], references: [id])
+  plan  Plan? @relation(fields: [planId], references: [id])
 
   // Relações com o Schema APP
   appUsers      AppUser[]
