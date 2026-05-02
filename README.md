@@ -2,9 +2,9 @@
   🇺🇸 English | 🇧🇷 <a href="./README.pt-BR.md">Português</a>
 </p>
 
-# 🚗 ControlCar
+# ControlCar
 
-## 🚀 Overview
+## Overview
 
 **ControlCar** is a B2B multi-tenant SaaS platform designed to modernize and optimize the management of automotive repair shops and mechanical workshops.
 
@@ -16,7 +16,7 @@ ControlCar was also developed with a strong software engineering foundation, com
 
 ---
 
-## ✨ Core Features
+## Core Features
 
 * **Multi-Tenant SaaS Architecture**
 
@@ -56,7 +56,7 @@ ControlCar was also developed with a strong software engineering foundation, com
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 ## Backend
 
@@ -101,7 +101,7 @@ ControlCar was also developed with a strong software engineering foundation, com
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```text
 ControlCar
@@ -143,7 +143,7 @@ ControlCar
 
 ---
 
-## 🔒 Multi-Tenant Architecture
+## Multi-Tenant Architecture
 
 One of the most critical aspects of ControlCar is its **tenant isolation strategy**.
 
@@ -160,7 +160,7 @@ This architecture enables safe horizontal scaling while preserving centralized a
 
 ---
 
-## 🗄️ Database Management
+## Database Management
 
 ControlCar uses **PostgreSQL** as its primary relational database.
 
@@ -180,7 +180,7 @@ db/schema.sql
 
 ---
 
-## ⚙️ Setup
+## Setup
 
 ## 1. Clone the repository
 
@@ -230,7 +230,7 @@ http://localhost:5050
 
 ---
 
-## 📋 Development Process
+## Development Process
 
 ControlCar was not built only as a software product, but also as a complete software engineering project.
 
@@ -256,7 +256,7 @@ This ensured alignment between implementation decisions and business value deliv
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 The `/docs` directory includes:
 
@@ -275,7 +275,7 @@ This provides complete project traceability from business conception to technica
 
 ---
 
-## 📝 License
+## License
 
 Private project.
 
